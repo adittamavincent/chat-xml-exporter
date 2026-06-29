@@ -45,7 +45,9 @@ def install(driver):
     """Call once right after the driver is created (and again after a full
     page reload, e.g. post-login) so the hook is present before the site's
     own JS loads."""
-    driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {"source": INJECT_SCRIPT})
+    driver.execute_cdp_cmd(
+        "Page.addScriptToEvaluateOnNewDocument", {"source": INJECT_SCRIPT}
+    )
     driver.execute_script(INJECT_SCRIPT)
 
 

@@ -21,8 +21,19 @@ sesuai urutan DOM dari atas ke bawah.
 
 ## Setup
 
+Script ini menggunakan [uv](https://github.com/astral-sh/uv). Tidak perlu install manual, `uv` otomatis membaca dependency inline dan men-setup environment pas pertama kali jalan:
+
 ```bash
-pip install -r requirements.txt
+# Langsung jalankan dengan uv run
+uv run exporter.py --site claude
+```
+
+Atau jika ingin membuat virtual environment manual menggunakan `uv`:
+
+```bash
+uv venv
+uv pip install -r requirements.txt
+source .venv/bin/activate
 ```
 
 Butuh Chrome browser terinstall di mesin kamu. Selenium 4 udah auto-handle
@@ -32,9 +43,9 @@ manual.
 ## Pakai
 
 ```bash
-python exporter.py --site claude
-python exporter.py --site gemini
-python exporter.py --site aistudio
+uv run exporter.py --site claude
+uv run exporter.py --site gemini
+uv run exporter.py --site aistudio
 ```
 
 Browser headed (kelihatan, bukan headless) akan terbuka. Login manual kalau
@@ -45,13 +56,13 @@ Profile Chrome disimpen di `./chrome_profile` by default, jadi run
 selanjutnya nggak perlu login ulang. Mau pisah profile per situs:
 
 ```bash
-python exporter.py --site claude --profile ./profiles/claude
+uv run exporter.py --site claude --profile ./profiles/claude
 ```
 
 Custom output path:
 
 ```bash
-python exporter.py --site claude --output output/sidang_proposal_chat.xml
+uv run exporter.py --site claude --output output/sidang_proposal_chat.xml
 ```
 
 Flat tanpa root wrapper (langsung `<user>`/`<response>` berurutan tanpa
@@ -59,7 +70,7 @@ Flat tanpa root wrapper (langsung `<user>`/`<response>` berurutan tanpa
 Cogdex/Notion):
 
 ```bash
-python exporter.py --site claude --root-tag ""
+uv run exporter.py --site claude --root-tag ""
 ```
 
 ## Status selector per situs

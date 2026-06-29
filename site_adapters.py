@@ -16,7 +16,11 @@ That's a 2-minute fix, not a rewrite.
 """
 
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import NoSuchElementException, ElementClickInterceptedException, StaleElementReferenceException
+from selenium.common.exceptions import (
+    NoSuchElementException,
+    ElementClickInterceptedException,
+    StaleElementReferenceException,
+)
 
 import clipboard_hook
 
@@ -33,6 +37,7 @@ def _safe_click(driver, element):
 # Claude.ai
 # ---------------------------------------------------------------------------
 
+
 def iter_claude_turns(driver):
     groups = driver.find_elements(
         By.CSS_SELECTOR, '[role="group"][aria-label="Message actions"]'
@@ -40,9 +45,16 @@ def iter_claude_turns(driver):
     for group in groups:
         try:
             is_response = (
-                len(group.find_elements(By.CSS_SELECTOR, 'button[aria-label="Give positive feedback"]')) > 0
+                len(
+                    group.find_elements(
+                        By.CSS_SELECTOR, 'button[aria-label="Give positive feedback"]'
+                    )
+                )
+                > 0
             )
-            copy_btn = group.find_element(By.CSS_SELECTOR, 'button[data-testid="action-bar-copy"]')
+            copy_btn = group.find_element(
+                By.CSS_SELECTOR, 'button[data-testid="action-bar-copy"]'
+            )
         except (NoSuchElementException, StaleElementReferenceException):
             continue  # e.g. an in-progress / still-streaming turn with no copy button yet
 
@@ -56,18 +68,23 @@ def iter_claude_turns(driver):
 # Gemini (gemini.google.com) - BEST EFFORT, verify selectors first
 # ---------------------------------------------------------------------------
 
+
 def iter_gemini_turns(driver):
     turns = driver.find_elements(By.CSS_SELECTOR, "user-query, model-response")
     for turn in turns:
         tag = turn.tag_name.lower()
         try:
             if tag == "user-query":
-                text_el = turn.find_element(By.CSS_SELECTOR, ".query-text, .query-text-line")
+                text_el = turn.find_element(
+                    By.CSS_SELECTOR, ".query-text, .query-text-line"
+                )
                 text = text_el.text.strip()
                 if text:
                     yield ("user", text)
             else:
-                copy_btn = turn.find_element(By.CSS_SELECTOR, 'button[aria-label="Copy"]')
+                copy_btn = turn.find_element(
+                    By.CSS_SELECTOR, 'button[aria-label="Copy"]'
+                )
                 _safe_click(driver, copy_btn)
                 text = clipboard_hook.read(driver)
                 if text:
@@ -80,11 +97,14 @@ def iter_gemini_turns(driver):
 # AI Studio (aistudio.google.com) - BEST EFFORT, verify selectors first
 # ---------------------------------------------------------------------------
 
+
 def iter_aistudio_turns(driver):
     turns = driver.find_elements(By.CSS_SELECTOR, "ms-chat-turn")
     for turn in turns:
         try:
-            user_chunk = turn.find_elements(By.CSS_SELECTOR, "ms-prompt-chunk, [data-turn-role='user']")
+            user_chunk = turn.find_elements(
+                By.CSS_SELECTOR, "ms-prompt-chunk, [data-turn-role='user']"
+            )
             if user_chunk:
                 text = turn.text.strip()
                 if text:
@@ -96,12 +116,18 @@ def iter_aistudio_turns(driver):
             # first, then fall back to opening the menu.
             try:
                 copy_btn = turn.find_element(
-                    By.CSS_SELECTOR, 'button[aria-label*="markdown" i], button[aria-label*="Copy" i]'
+                    By.CSS_SELECTOR,
+                    'button[aria-label*="markdown" i], button[aria-label*="Copy" i]',
                 )
             except NoSuchElementException:
-                menu_btn = turn.find_element(By.CSS_SELECTOR, 'button[aria-label*="more" i]')
+                menu_btn = turn.find_element(
+                    By.CSS_SELECTOR, 'button[aria-label*="more" i]'
+                )
                 _safe_click(driver, menu_btn)
-                copy_btn = driver.find_element(By.XPATH, '//*[contains(translate(text(), "MARKDOWN", "markdown"), "markdown")]')
+                copy_btn = driver.find_element(
+                    By.XPATH,
+                    '//*[contains(translate(text(), "MARKDOWN", "markdown"), "markdown")]',
+                )
 
             _safe_click(driver, copy_btn)
             text = clipboard_hook.read(driver)

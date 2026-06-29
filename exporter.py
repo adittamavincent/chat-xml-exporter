@@ -1,8 +1,14 @@
+# /// script
+# dependencies = [
+#   "selenium>=4.20.0",
+# ]
+# ///
+
 """
 Usage:
-    python exporter.py --site claude
-    python exporter.py --site gemini --output output/my_convo.xml
-    python exporter.py --site aistudio --root-tag ""   # rootless flat output
+    uv run exporter.py --site claude
+    uv run exporter.py --site gemini --output output/my_convo.xml
+    uv run exporter.py --site aistudio --root-tag ""   # rootless flat output
 
 Flow:
 1. Opens a real (headed) Chrome window with a persistent profile dir, so you
