@@ -265,6 +265,7 @@ async function scrapePerplexity() {
       .map((l) => l.trim());
     const dropLine = (l) =>
       l.length === 0 ||
+      /^download$/i.test(l) ||
       /^copy$/i.test(l) ||
       /^copied$/i.test(l) ||
       /^share$/i.test(l) ||
@@ -289,35 +290,50 @@ async function scrapePerplexity() {
   };
   document.addEventListener("captured-clipboard", onCapture);
 
+  const pickBlock = (btn) => {
+    let cur = btn;
+    for (let i = 0; i < 12 && cur; i++) {
+      if (cur.classList && cur.classList.contains("bg-base")) return cur;
+      cur = cur.parentElement;
+    }
+
+    let best = btn.closest("div") || btn;
+    cur = best;
+    for (let i = 0; i < 10 && cur && cur.parentElement; i++) {
+      if (cur === root || cur === document.body) break;
+      const t = (cur.innerText || "").trim();
+      if (t.length >= 120) best = cur;
+      if (t.length >= 4000) break;
+      cur = cur.parentElement;
+    }
+    return best;
+  };
+
   const queryButtons = Array.from(root.querySelectorAll('button[aria-label="Copy query"]'));
-  const articles = Array.from(root.querySelectorAll("article"));
-  const candidates = [];
+  const copyButtons = Array.from(root.querySelectorAll('button[aria-label="Copy"]'));
+  const items = [];
 
   for (const btn of queryButtons) {
-    const wrapper = btn.closest("div.group") || btn.closest("div") || btn;
-    candidates.push({ role: "user", el: wrapper, btn });
+    items.push({ role: "user", block: pickBlock(btn), btn });
+  }
+  for (const btn of copyButtons) {
+    items.push({ role: "response", block: pickBlock(btn), btn });
   }
 
-  for (const article of articles) {
-    candidates.push({ role: "response", el: article, btn: null });
-  }
-
-  candidates.sort((a, b) => {
-    if (a.el === b.el) return 0;
-    const pos = a.el.compareDocumentPosition(b.el);
+  items.sort((a, b) => {
+    if (a.block === b.block) return 0;
+    const pos = a.block.compareDocumentPosition(b.block);
     if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
     if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1;
     return 0;
   });
 
-  for (const item of candidates) {
+  for (const item of items) {
     if (item.role === "user") {
-      pushTurn("user", normalizeUserText(item.el.innerText));
+      pushTurn("user", normalizeUserText(item.block?.innerText || ""));
     } else {
-      pushTurn("response", normalizeResponseText(item.el.innerText));
+      pushTurn("response", normalizeResponseText(item.block?.innerText || ""));
     }
-
-    if (!item.btn) continue;
 
     capturedText = null;
     safeClick(item.btn);
@@ -325,21 +341,15 @@ async function scrapePerplexity() {
       if (capturedText !== null) break;
       await wait(100);
     }
-    if (capturedText) {
-      pushTurn(item.role, capturedText);
-    }
+    if (capturedText) pushTurn(item.role, capturedText);
   }
 
-  const copyButtons = Array.from(root.querySelectorAll('button[aria-label="Copy"]'));
-  for (const btn of copyButtons) {
-    capturedText = null;
-    safeClick(btn);
-    for (let attempt = 0; attempt < 20; attempt++) {
-      if (capturedText !== null) break;
-      await wait(100);
-    }
-    if (capturedText) {
-      pushTurn("response", capturedText);
+  if (!turns.some((t) => t.role === "response")) {
+    const blocks = Array.from(root.querySelectorAll(".bg-base"));
+    for (const b of blocks) {
+      if (b.querySelector('button[aria-label="Copy query"]')) continue;
+      const t = normalizeResponseText(b.innerText);
+      if (t.length >= 120) pushTurn("response", t);
     }
   }
 
