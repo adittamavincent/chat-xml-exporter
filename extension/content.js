@@ -290,66 +290,68 @@ async function scrapePerplexity() {
   };
   document.addEventListener("captured-clipboard", onCapture);
 
-  const pickBlock = (btn) => {
-    let cur = btn;
-    for (let i = 0; i < 12 && cur; i++) {
-      if (cur.classList && cur.classList.contains("bg-base")) return cur;
+  const getTurnContainer = (btn, role) => {
+    const wantUser = role === "user";
+    const minLen = wantUser ? 5 : 40;
+    let best = btn.closest("div") || btn.parentElement || btn;
+
+    let cur = best;
+    for (let i = 0; i < 14 && cur; i++) {
+      if (cur === root || cur === document.body) break;
+
+      const userBtnCount = cur.querySelectorAll('button[aria-label="Copy query"]').length;
+      const respBtnCount = cur.querySelectorAll('button[aria-label="Copy"]').length;
+      const t = (cur.innerText || "").trim();
+
+      const hasOnlyThisTurn =
+        wantUser ? userBtnCount === 1 && respBtnCount === 0 : respBtnCount === 1 && userBtnCount === 0;
+
+      if (hasOnlyThisTurn && t.length >= minLen && t.length <= 20_000) {
+        best = cur;
+        break;
+      }
+
       cur = cur.parentElement;
     }
 
-    let best = btn.closest("div") || btn;
-    cur = best;
-    for (let i = 0; i < 10 && cur && cur.parentElement; i++) {
-      if (cur === root || cur === document.body) break;
-      const t = (cur.innerText || "").trim();
-      if (t.length >= 120) best = cur;
-      if (t.length >= 4000) break;
-      cur = cur.parentElement;
-    }
     return best;
   };
 
-  const queryButtons = Array.from(root.querySelectorAll('button[aria-label="Copy query"]'));
-  const copyButtons = Array.from(root.querySelectorAll('button[aria-label="Copy"]'));
   const items = [];
 
-  for (const btn of queryButtons) {
-    items.push({ role: "user", block: pickBlock(btn), btn });
+  for (const btn of Array.from(root.querySelectorAll('button[aria-label="Copy query"]'))) {
+    items.push({ role: "user", btn, container: getTurnContainer(btn, "user") });
   }
-  for (const btn of copyButtons) {
-    items.push({ role: "response", block: pickBlock(btn), btn });
+
+  for (const btn of Array.from(root.querySelectorAll('button[aria-label="Copy"]'))) {
+    items.push({ role: "response", btn, container: getTurnContainer(btn, "response") });
   }
 
   items.sort((a, b) => {
-    if (a.block === b.block) return 0;
-    const pos = a.block.compareDocumentPosition(b.block);
+    if (a.btn === b.btn) return 0;
+    const pos = a.btn.compareDocumentPosition(b.btn);
     if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
     if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1;
     return 0;
   });
 
   for (const item of items) {
-    if (item.role === "user") {
-      pushTurn("user", normalizeUserText(item.block?.innerText || ""));
-    } else {
-      pushTurn("response", normalizeResponseText(item.block?.innerText || ""));
-    }
-
     capturedText = null;
     safeClick(item.btn);
     for (let attempt = 0; attempt < 20; attempt++) {
       if (capturedText !== null) break;
       await wait(100);
     }
-    if (capturedText) pushTurn(item.role, capturedText);
-  }
 
-  if (!turns.some((t) => t.role === "response")) {
-    const blocks = Array.from(root.querySelectorAll(".bg-base"));
-    for (const b of blocks) {
-      if (b.querySelector('button[aria-label="Copy query"]')) continue;
-      const t = normalizeResponseText(b.innerText);
-      if (t.length >= 120) pushTurn("response", t);
+    if (capturedText) {
+      pushTurn(item.role, capturedText);
+      continue;
+    }
+
+    if (item.role === "user") {
+      pushTurn("user", normalizeUserText(item.container?.innerText || ""));
+    } else {
+      pushTurn("response", normalizeResponseText(item.container?.innerText || ""));
     }
   }
 
