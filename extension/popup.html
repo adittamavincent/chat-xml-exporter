@@ -104,7 +104,7 @@
     }
 
     .list-container:empty::after {
-      content: 'No preview available. Click Extract first.';
+      content: 'No preview yet. Open popup on supported chat page.';
       display: block;
       padding: 16px;
       text-align: center;
@@ -150,21 +150,11 @@
 </head>
 <body>
   <h3>Chat XML Exporter</h3>
-  
-  <button id="extract-btn" class="btn">
-    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-    Extract & Download XML
-  </button>
-  
-  <button id="dl-top-btn" class="btn" style="margin-top: 12px; display: none;">
-    Download XML (Top)
+  <button id="download-btn" class="btn" style="margin-top: 12px;" disabled>
+    Download XML
   </button>
 
-  <div id="preview-list" class="list-container"></div>
-
-  <button id="dl-bottom-btn" class="btn" style="display: none;">
-    Download XML (Bottom)
-  </button>
+  <div id="preview-list" class="list-container" style="margin-top: 12px;"></div>
 
   <div id="status">Ready</div>
 

@@ -90,6 +90,29 @@ async function scrapeGemini() {
   const turns = [];
   const elements = document.querySelectorAll("user-query, model-response");
 
+  const normalizeUserText = (text) => {
+    const lines = String(text || "")
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+    while (lines.length && /^you said$/i.test(lines[0])) lines.shift();
+    return lines.join("\n").trim();
+  };
+
+  const normalizeResponseText = (text) => {
+    const lines = String(text || "")
+      .split(/\r?\n/)
+      .map((l) => l.trim());
+    const dropLine = (l) =>
+      l.length === 0 ||
+      /^copy$/i.test(l) ||
+      /^copied$/i.test(l) ||
+      /^share$/i.test(l) ||
+      /^edit$/i.test(l);
+    const kept = lines.filter((l) => !dropLine(l));
+    return kept.join("\n").trim();
+  };
+
   let capturedText = null;
   const onCapture = (e) => {
     capturedText = e.detail;
@@ -102,16 +125,18 @@ async function scrapeGemini() {
 
     if (tag === "user-query") {
       const textEl = el.querySelector(".query-text, .query-text-line");
-      const text = textEl ? textEl.innerText.trim() : "";
+      const rawText = textEl ? textEl.innerText : el.innerText;
+      const text = normalizeUserText(rawText);
       if (text) {
         turns.push({ role: "user", text });
       }
     } else {
-      const copyBtn = el.querySelector('button[aria-label="Copy"]');
-      if (!copyBtn) continue;
+      const copyBtn = el.querySelector(
+        'button[aria-label*="Copy" i], button[title*="Copy" i], button[data-testid*="copy" i]'
+      );
 
       capturedText = null;
-      safeClick(copyBtn);
+      if (copyBtn) safeClick(copyBtn);
 
       for (let attempt = 0; attempt < 20; attempt++) {
         if (capturedText !== null) break;
@@ -120,6 +145,12 @@ async function scrapeGemini() {
 
       if (capturedText) {
         turns.push({ role: "response", text: capturedText });
+        continue;
+      }
+
+      const fallback = normalizeResponseText(el.innerText);
+      if (fallback) {
+        turns.push({ role: "response", text: fallback });
       }
     }
   }

@@ -1,13 +1,11 @@
 document.addEventListener("DOMContentLoaded", async () => {
   const statusEl = document.getElementById("status");
-  const extractBtn = document.getElementById("extract-btn");
-  const dlTopBtn = document.getElementById("dl-top-btn");
-  const dlBottomBtn = document.getElementById("dl-bottom-btn");
+  const downloadBtn = document.getElementById("download-btn");
   const previewList = document.getElementById("preview-list");
 
   let extractedTurns = [];
 
-  // Automatically start extraction when popup opens
+  downloadBtn.disabled = true;
   statusEl.textContent = "Connecting to tab...";
   
   try {
@@ -41,10 +39,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         
         if (extractedTurns.length > 0) {
           statusEl.textContent = `Successfully extracted ${extractedTurns.length} turns!`;
-          // Hide initial extract button, show download buttons
-          extractBtn.style.display = "none";
-          dlTopBtn.style.display = "flex";
-          dlBottomBtn.style.display = "flex";
+          downloadBtn.disabled = false;
         } else {
           statusEl.textContent = "No turns found. Check selectors.";
         }
@@ -131,11 +126,5 @@ document.addEventListener("DOMContentLoaded", async () => {
     setTimeout(() => URL.revokeObjectURL(url), 30_000);
   }
 
-  dlTopBtn.addEventListener("click", triggerDownload);
-  dlBottomBtn.addEventListener("click", triggerDownload);
-  
-  // Manual trigger button as fallback
-  extractBtn.addEventListener("click", () => {
-    window.location.reload();
-  });
+  downloadBtn.addEventListener("click", triggerDownload);
 });
