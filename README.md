@@ -28,6 +28,7 @@ Source: folder [extension/](file:///Users/adittama/repositories/chat-xml-exporte
    - `https://claude.ai/*`
    - `https://gemini.google.com/*`
    - `https://aistudio.google.com/*`
+   - `https://www.perplexity.ai/*`
 2. Klik icon extension → popup auto jalan “Extracting…”
 3. Klik **Download XML**
 4. File masuk folder **Downloads** user (default Chrome) dengan nama `chat_export_YYYY-MM-DD.xml`

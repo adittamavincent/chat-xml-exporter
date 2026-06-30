@@ -16,10 +16,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     const host = new URL(tab.url).hostname;
-    const supported = ["claude.ai", "gemini.google.com", "aistudio.google.com"].some(h => host.includes(h));
+    const supported = ["claude.ai", "gemini.google.com", "aistudio.google.com", "perplexity.ai"].some(h => host.includes(h));
     
     if (!supported) {
-      statusEl.textContent = "Please open Claude, Gemini, or AI Studio";
+      statusEl.textContent = "Please open Claude, Gemini, AI Studio, or Perplexity";
       return;
     }
 

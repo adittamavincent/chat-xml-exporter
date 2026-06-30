@@ -17,6 +17,26 @@ function injectClipboardHook() {
       } catch (e) {}
 
       try {
+        if (navigator.clipboard && navigator.clipboard.write) {
+          const original = navigator.clipboard.write.bind(navigator.clipboard);
+          navigator.clipboard.write = function(items) {
+            try {
+              const first = items && items[0];
+              if (first && typeof first.getType === 'function') {
+                first.getType('text/plain')
+                  .then((blob) => blob.text())
+                  .then((text) => {
+                    document.dispatchEvent(new CustomEvent('captured-clipboard', { detail: text }));
+                  })
+                  .catch(() => {});
+              }
+            } catch (e) {}
+            return original(items);
+          };
+        }
+      } catch (e) {}
+
+      try {
         const originalExec = document.execCommand.bind(document);
         document.execCommand = function(cmd, ...rest) {
           if (cmd === 'copy') {
@@ -213,6 +233,46 @@ async function scrapeAISudio() {
   return turns;
 }
 
+async function scrapePerplexity() {
+  const turns = [];
+  const root = document.querySelector("main") || document.body;
+
+  let capturedText = null;
+  const onCapture = (e) => {
+    capturedText = e.detail;
+  };
+  document.addEventListener("captured-clipboard", onCapture);
+  const buttons = Array.from(
+    root.querySelectorAll('button[aria-label="Copy query"], button[aria-label="Copy"]')
+  );
+  const seen = new Set();
+
+  for (const btn of buttons) {
+    const aria = (btn.getAttribute("aria-label") || "").toLowerCase();
+    const role = aria.includes("query") ? "user" : "response";
+
+    capturedText = null;
+    safeClick(btn);
+
+    for (let attempt = 0; attempt < 20; attempt++) {
+      if (capturedText !== null) break;
+      await wait(100);
+    }
+
+    if (!capturedText) continue;
+    const text = String(capturedText).trim();
+    if (!text) continue;
+
+    const key = `${role}\u0000${text}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    turns.push({ role, text });
+  }
+
+  document.removeEventListener("captured-clipboard", onCapture);
+  return turns;
+}
+
 // Listen for scrape request
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "scrape") {
@@ -227,6 +287,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       promise = scrapeGemini();
     } else if (host.includes("aistudio.google.com")) {
       promise = scrapeAISudio();
+    } else if (host.includes("perplexity.ai")) {
+      promise = scrapePerplexity();
     } else {
       sendResponse({ success: false, error: "Unsupported website" });
       return true;
