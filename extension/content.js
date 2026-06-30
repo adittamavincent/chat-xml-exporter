@@ -23,12 +23,20 @@ function injectClipboardHook() {
             try {
               const first = items && items[0];
               if (first && typeof first.getType === 'function') {
-                first.getType('text/plain')
-                  .then((blob) => blob.text())
-                  .then((text) => {
-                    document.dispatchEvent(new CustomEvent('captured-clipboard', { detail: text }));
-                  })
-                  .catch(() => {});
+                const typeOrder = ['text/plain', 'text/markdown', 'text/html'];
+                const types = Array.isArray(first.types) ? first.types : [];
+                const pick =
+                  typeOrder.find((t) => types.includes(t)) ||
+                  types.find((t) => typeOrder.includes(t)) ||
+                  types[0];
+                if (pick) {
+                  first.getType(pick)
+                    .then((blob) => blob.text())
+                    .then((text) => {
+                      document.dispatchEvent(new CustomEvent('captured-clipboard', { detail: text }));
+                    })
+                    .catch(() => {});
+                }
               }
             } catch (e) {}
             return original(items);
@@ -237,36 +245,107 @@ async function scrapePerplexity() {
   const turns = [];
   const root = document.querySelector("main") || document.body;
 
+  const normalizeUserText = (text) => {
+    const lines = String(text || "")
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+    const dropLine = (l) =>
+      /^edit query$/i.test(l) ||
+      /^copy query$/i.test(l) ||
+      /^you said$/i.test(l) ||
+      /^question$/i.test(l);
+    const kept = lines.filter((l) => !dropLine(l));
+    return kept.join("\n").trim();
+  };
+
+  const normalizeResponseText = (text) => {
+    const lines = String(text || "")
+      .split(/\r?\n/)
+      .map((l) => l.trim());
+    const dropLine = (l) =>
+      l.length === 0 ||
+      /^copy$/i.test(l) ||
+      /^copied$/i.test(l) ||
+      /^share$/i.test(l) ||
+      /^edit$/i.test(l);
+    const kept = lines.filter((l) => !dropLine(l));
+    return kept.join("\n").trim();
+  };
+
+  const seen = new Set();
+  const pushTurn = (role, text) => {
+    const t = String(text || "").trim();
+    if (!t) return;
+    const key = `${role}\u0000${t}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    turns.push({ role, text: t });
+  };
+
   let capturedText = null;
   const onCapture = (e) => {
     capturedText = e.detail;
   };
   document.addEventListener("captured-clipboard", onCapture);
-  const buttons = Array.from(
-    root.querySelectorAll('button[aria-label="Copy query"], button[aria-label="Copy"]')
-  );
-  const seen = new Set();
 
-  for (const btn of buttons) {
-    const aria = (btn.getAttribute("aria-label") || "").toLowerCase();
-    const role = aria.includes("query") ? "user" : "response";
+  const queryButtons = Array.from(root.querySelectorAll('button[aria-label="Copy query"]'));
+  const articles = Array.from(root.querySelectorAll("article"));
+  const candidates = [];
+
+  for (const btn of queryButtons) {
+    const wrapper = btn.closest("div.group") || btn.closest("div") || btn;
+    candidates.push({ role: "user", el: wrapper, btn });
+  }
+
+  for (const article of articles) {
+    candidates.push({ role: "response", el: article, btn: null });
+  }
+
+  candidates.sort((a, b) => {
+    if (a.el === b.el) return 0;
+    const pos = a.el.compareDocumentPosition(b.el);
+    if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+    if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+    return 0;
+  });
+
+  for (const item of candidates) {
+    if (item.role === "user") {
+      pushTurn("user", normalizeUserText(item.el.innerText));
+    } else {
+      pushTurn("response", normalizeResponseText(item.el.innerText));
+    }
+
+    if (!item.btn) continue;
 
     capturedText = null;
-    safeClick(btn);
-
+    safeClick(item.btn);
     for (let attempt = 0; attempt < 20; attempt++) {
       if (capturedText !== null) break;
       await wait(100);
     }
+    if (capturedText) {
+      pushTurn(item.role, capturedText);
+    }
+  }
 
-    if (!capturedText) continue;
-    const text = String(capturedText).trim();
-    if (!text) continue;
+  const copyButtons = Array.from(root.querySelectorAll('button[aria-label="Copy"]'));
+  for (const btn of copyButtons) {
+    capturedText = null;
+    safeClick(btn);
+    for (let attempt = 0; attempt < 20; attempt++) {
+      if (capturedText !== null) break;
+      await wait(100);
+    }
+    if (capturedText) {
+      pushTurn("response", capturedText);
+    }
+  }
 
-    const key = `${role}\u0000${text}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    turns.push({ role, text });
+  if (!turns.some((t) => t.role === "user")) {
+    const h1 = root.querySelector("h1");
+    if (h1) pushTurn("user", normalizeUserText(h1.innerText));
   }
 
   document.removeEventListener("captured-clipboard", onCapture);
