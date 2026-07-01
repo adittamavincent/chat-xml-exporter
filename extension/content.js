@@ -71,46 +71,47 @@ function safeClick(element) {
   try {
     element.click();
   } catch (e) {
-    // Fallback to JS click
     element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
   }
+}
+
+// Event-driven: resolve Promise the moment captured-clipboard fires instead of polling
+function captureAfterClick(clickFn, timeout = 3000) {
+  return new Promise((resolve) => {
+    let done = false;
+    const handler = (e) => {
+      done = true;
+      document.removeEventListener("captured-clipboard", handler);
+      resolve(e.detail);
+    };
+    document.addEventListener("captured-clipboard", handler);
+    clickFn();
+    setTimeout(() => {
+      if (!done) {
+        document.removeEventListener("captured-clipboard", handler);
+        resolve(null);
+      }
+    }, timeout);
+  });
 }
 
 async function scrapeClaude() {
   const turns = [];
   const groups = document.querySelectorAll('[role="group"][aria-label="Message actions"]');
-  
-  let capturedText = null;
-  const onCapture = (e) => {
-    capturedText = e.detail;
-  };
-  document.addEventListener("captured-clipboard", onCapture);
 
   for (let i = 0; i < groups.length; i++) {
     const group = groups[i];
     const isResponse = group.querySelector('button[aria-label="Give positive feedback"]') !== null;
     const copyBtn = group.querySelector('button[data-testid="action-bar-copy"]');
-    
+
     if (!copyBtn) continue;
 
-    capturedText = null;
-    safeClick(copyBtn);
-
-    // Wait up to 2 seconds
-    for (let attempt = 0; attempt < 20; attempt++) {
-      if (capturedText !== null) break;
-      await wait(100);
-    }
-
-    if (capturedText) {
-      turns.push({
-        role: isResponse ? "response" : "user",
-        text: capturedText
-      });
+    const text = await captureAfterClick(() => safeClick(copyBtn));
+    if (text) {
+      turns.push({ role: isResponse ? "response" : "user", text });
     }
   }
 
-  document.removeEventListener("captured-clipboard", onCapture);
   return turns;
 }
 
@@ -141,12 +142,6 @@ async function scrapeGemini() {
     return kept.join("\n").trim();
   };
 
-  let capturedText = null;
-  const onCapture = (e) => {
-    capturedText = e.detail;
-  };
-  document.addEventListener("captured-clipboard", onCapture);
-
   for (let i = 0; i < elements.length; i++) {
     const el = elements[i];
     const tag = el.tagName.toLowerCase();
@@ -163,16 +158,11 @@ async function scrapeGemini() {
         'button[aria-label*="Copy" i], button[title*="Copy" i], button[data-testid*="copy" i]'
       );
 
-      capturedText = null;
-      if (copyBtn) safeClick(copyBtn);
+      let text = null;
+      if (copyBtn) text = await captureAfterClick(() => safeClick(copyBtn));
 
-      for (let attempt = 0; attempt < 20; attempt++) {
-        if (capturedText !== null) break;
-        await wait(100);
-      }
-
-      if (capturedText) {
-        turns.push({ role: "response", text: capturedText });
+      if (text) {
+        turns.push({ role: "response", text });
         continue;
       }
 
@@ -183,19 +173,12 @@ async function scrapeGemini() {
     }
   }
 
-  document.removeEventListener("captured-clipboard", onCapture);
   return turns;
 }
 
 async function scrapeAISudio() {
   const turns = [];
   const chatTurns = document.querySelectorAll("ms-chat-turn");
-
-  let capturedText = null;
-  const onCapture = (e) => {
-    capturedText = e.detail;
-  };
-  document.addEventListener("captured-clipboard", onCapture);
 
   for (let i = 0; i < chatTurns.length; i++) {
     const turn = chatTurns[i];
@@ -207,15 +190,13 @@ async function scrapeAISudio() {
         turns.push({ role: "user", text });
       }
     } else {
-      // Find copy button or fallback to kebab menu
       let copyBtn = turn.querySelector('button[aria-label*="markdown" i], button[aria-label*="Copy" i]');
-      
+
       if (!copyBtn) {
         const menuBtn = turn.querySelector('button[aria-label*="more" i]');
         if (menuBtn) {
           safeClick(menuBtn);
           await wait(200);
-          // Find menu item containing markdown
           const menuItems = Array.from(document.querySelectorAll("span, button, div"));
           copyBtn = menuItems.find(el => el.textContent.toLowerCase().includes("markdown"));
         }
@@ -223,21 +204,13 @@ async function scrapeAISudio() {
 
       if (!copyBtn) continue;
 
-      capturedText = null;
-      safeClick(copyBtn);
-
-      for (let attempt = 0; attempt < 20; attempt++) {
-        if (capturedText !== null) break;
-        await wait(100);
-      }
-
-      if (capturedText) {
-        turns.push({ role: "response", text: capturedText });
+      const text = await captureAfterClick(() => safeClick(copyBtn));
+      if (text) {
+        turns.push({ role: "response", text });
       }
     }
   }
 
-  document.removeEventListener("captured-clipboard", onCapture);
   return turns;
 }
 
@@ -283,12 +256,6 @@ async function scrapePerplexity() {
     seen.add(key);
     turns.push({ role, text: t });
   };
-
-  let capturedText = null;
-  const onCapture = (e) => {
-    capturedText = e.detail;
-  };
-  document.addEventListener("captured-clipboard", onCapture);
 
   const getTurnContainer = (btn, role) => {
     const wantUser = role === "user";
@@ -336,15 +303,13 @@ async function scrapePerplexity() {
   });
 
   for (const item of items) {
-    capturedText = null;
-    safeClick(item.btn);
-    for (let attempt = 0; attempt < 20; attempt++) {
-      if (capturedText !== null) break;
-      await wait(100);
+    let text = null;
+    if (item.btn) {
+      text = await captureAfterClick(() => safeClick(item.btn));
     }
 
-    if (capturedText) {
-      pushTurn(item.role, capturedText);
+    if (text) {
+      pushTurn(item.role, text);
       continue;
     }
 
@@ -360,7 +325,6 @@ async function scrapePerplexity() {
     if (h1) pushTurn("user", normalizeUserText(h1.innerText));
   }
 
-  document.removeEventListener("captured-clipboard", onCapture);
   return turns;
 }
 

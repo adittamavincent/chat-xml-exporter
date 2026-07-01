@@ -51,16 +51,30 @@ def install(driver):
     driver.execute_script(INJECT_SCRIPT)
 
 
-def read(driver, timeout=6.0, poll=0.1):
+def read(driver, timeout=3.0):
     """Wait for a captured clipboard write and return it, clearing the slot
-    afterwards. Returns None on timeout (e.g. the copy button didn't fire)."""
-    import time
+    afterwards. Returns None on timeout (e.g. the copy button didn't fire).
 
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        value = driver.execute_script("return window.__capturedClipboard;")
-        if value:
-            driver.execute_script("window.__capturedClipboard = null;")
-            return value
-        time.sleep(poll)
-    return None
+    Uses execute_async_script so polling runs inside the browser at ~5ms
+    intervals — a single round-trip per turn instead of N round-trips."""
+    script = f"""
+        const callback = arguments[arguments.length - 1];
+        const deadline = Date.now() + {int(timeout * 1000)};
+        function poll() {{
+            const val = window.__capturedClipboard;
+            if (val) {{
+                window.__capturedClipboard = null;
+                callback(val);
+            }} else if (Date.now() >= deadline) {{
+                callback(null);
+            }} else {{
+                setTimeout(poll, 5);
+            }}
+        }}
+        poll();
+    """
+    try:
+        driver.set_script_timeout(timeout + 1)
+        return driver.execute_async_script(script)
+    except Exception:
+        return None
