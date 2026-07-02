@@ -7,6 +7,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const previewList = document.getElementById("preview-list");
   const consoleEl = document.getElementById("console");
   const turnsCounterEl = document.getElementById("turns-counter");
+  const clearBtn = document.getElementById("clear-btn");
 
   let extractedTurns = [];
   
@@ -31,6 +32,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     log("info", `Connected to active tab (${host})`);
     updateStatus("Connected", "active");
+    
+    // Retrieve scraper state if it was already running/completed in the page
+    getScraperState();
   } catch (err) {
     log("error", "Error: Cannot access active tab.");
     updateStatus("Disconnected", "");
@@ -39,15 +43,15 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   // Log function helper
-  function log(level, text) {
-    const timeStr = new Date().toTimeString().split(' ')[0];
+  function log(level, text, timeStr) {
+    const tStr = timeStr || new Date().toTimeString().split(' ')[0];
     
     const line = document.createElement("div");
     line.className = "console-line";
     
     const timeSpan = document.createElement("span");
     timeSpan.className = "console-time";
-    timeSpan.textContent = `[${timeStr}]`;
+    timeSpan.textContent = `[${tStr}]`;
     
     const textSpan = document.createElement("span");
     textSpan.className = `console-text ${level}`;
@@ -69,6 +73,66 @@ document.addEventListener("DOMContentLoaded", async () => {
     } else if (state === "running") {
       statusDotEl.classList.add("running");
     }
+  }
+
+  function updateScraperStatus(status) {
+    switch (status) {
+      case "running":
+        updateStatus("Running", "running");
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        downloadBtn.disabled = true;
+        break;
+      case "completed":
+        updateStatus("Completed", "active");
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        downloadBtn.disabled = extractedTurns.length === 0;
+        break;
+      case "stopped":
+        updateStatus("Stopped", "active");
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        downloadBtn.disabled = extractedTurns.length === 0;
+        break;
+      case "error":
+        updateStatus("Error", "active");
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        downloadBtn.disabled = extractedTurns.length === 0;
+        break;
+      case "idle":
+      default:
+        updateStatus("Connected", "active");
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        downloadBtn.disabled = true;
+        break;
+    }
+  }
+
+  function getScraperState() {
+    chrome.tabs.sendMessage(targetTabId, { action: "get-state" }, (state) => {
+      if (chrome.runtime.lastError || !state) {
+        return;
+      }
+      
+      // Load turns
+      extractedTurns = state.turns || [];
+      previewList.innerHTML = "";
+      extractedTurns.forEach((turn, idx) => renderTurn(turn, idx));
+      turnsCounterEl.textContent = `${extractedTurns.length} turns`;
+      
+      // Load logs
+      consoleEl.innerHTML = "";
+      const logs = state.logs || [];
+      logs.forEach((logItem) => {
+        log(logItem.level, logItem.text, logItem.timeStr);
+      });
+      
+      // Restore status & buttons
+      updateScraperStatus(state.status);
+    });
   }
 
   function renderTurn(turn, idx) {
@@ -107,7 +171,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     switch (message.action) {
       case "log":
-        log(message.level || "info", message.text);
+        log(message.level || "info", message.text, message.timeStr);
         break;
       case "turn":
         extractedTurns.push(message.turn);
@@ -117,24 +181,16 @@ document.addEventListener("DOMContentLoaded", async () => {
       case "finished":
         log("success", `Scraping completed! Successfully extracted ${message.turns.length} turns.`);
         extractedTurns = message.turns;
-        updateStatus("Completed", "active");
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-        downloadBtn.disabled = extractedTurns.length === 0;
+        updateScraperStatus("completed");
         break;
       case "stopped":
         log("warn", `Scraping stopped by user. Extracted ${message.turns.length} turns so far.`);
         extractedTurns = message.turns;
-        updateStatus("Stopped", "active");
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-        downloadBtn.disabled = extractedTurns.length === 0;
+        updateScraperStatus("stopped");
         break;
       case "error":
         log("error", `Scraper error: ${message.message}`);
-        updateStatus("Error", "active");
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
+        updateScraperStatus("error");
         break;
     }
   });
@@ -145,19 +201,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     previewList.innerHTML = "";
     turnsCounterEl.textContent = "0 turns";
     
-    startBtn.disabled = true;
-    stopBtn.disabled = false;
-    downloadBtn.disabled = true;
+    updateScraperStatus("running");
     
     log("info", "Starting extraction process...");
-    updateStatus("Running", "running");
 
     chrome.tabs.sendMessage(targetTabId, { action: "start-scrape" }, (response) => {
       if (chrome.runtime.lastError) {
         log("error", `Could not start: ${chrome.runtime.lastError.message}. Try reloading the chat page.`);
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-        updateStatus("Connected", "active");
+        updateScraperStatus("idle");
       }
     });
   });
@@ -166,6 +217,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     log("info", "Requesting stop...");
     stopBtn.disabled = true;
     chrome.tabs.sendMessage(targetTabId, { action: "stop-scrape" });
+  });
+
+  clearBtn.addEventListener("click", () => {
+    consoleEl.innerHTML = "";
+    chrome.tabs.sendMessage(targetTabId, { action: "clear-logs" }, () => {
+      log("info", "Logs cleared.");
+    });
   });
 
   downloadBtn.addEventListener("click", () => {

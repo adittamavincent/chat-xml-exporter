@@ -73,17 +73,26 @@ function injectClipboardHook() {
 // Automatically inject hook at document_start
 injectClipboardHook();
 
-// Control state
+// Control and State persistence
 let isCancelled = false;
+let scraperState = {
+  status: "idle", // "idle" | "running" | "completed" | "stopped" | "error"
+  turns: [],
+  logs: []
+};
 
 // Helpers to communicate with dashboard
 function sendLog(level, text) {
+  const timeStr = new Date().toTimeString().split(' ')[0];
+  const logItem = { level, text, timeStr };
+  scraperState.logs.push(logItem);
   try {
-    chrome.runtime.sendMessage({ action: "log", level, text });
+    chrome.runtime.sendMessage({ action: "log", ...logItem });
   } catch (e) {}
 }
 
 function sendTurn(turn) {
+  scraperState.turns.push(turn);
   try {
     chrome.runtime.sendMessage({ action: "turn", turn });
   } catch (e) {}
@@ -119,6 +128,26 @@ function findCopyButton(el) {
     }
   }
   return null;
+}
+
+// Helper to dynamically locate the scrollable container on the page
+function findScrollableContainer() {
+  const container = document.querySelector('gmat-main-content, main, .chat-history, .conversation-container');
+  if (container) return container;
+
+  // Search DOM for the deepest scrollable element
+  const all = document.querySelectorAll('*');
+  for (const el of all) {
+    if (el.scrollHeight > el.clientHeight) {
+      const overflow = window.getComputedStyle(el).overflowY;
+      if (overflow === 'auto' || overflow === 'scroll') {
+        if (el.tagName !== 'HTML' && el.tagName !== 'BODY') {
+          return el;
+        }
+      }
+    }
+  }
+  return window;
 }
 
 // Helper to wait
@@ -183,9 +212,11 @@ async function scrapeClaude() {
 // Auto-scroll to top to load full history for Gemini
 async function loadFullHistoryGemini() {
   sendLog("info", "Checking conversation history loading state...");
-  const container = document.querySelector('gmat-main-content, main, .chat-history, .conversation-container') || window;
+  const container = findScrollableContainer();
   let lastTurnCount = document.querySelectorAll("user-query").length;
   let stableCount = 0;
+  
+  sendLog("info", `Detected scroll container: ${container === window ? 'window' : container.tagName.toLowerCase() + '.' + container.className}`);
   
   for (let i = 0; i < 40; i++) {
     if (isCancelled) {
@@ -198,6 +229,7 @@ async function loadFullHistoryGemini() {
       window.scrollTo({ top: 0, behavior: 'instant' });
     } else {
       container.scrollTop = 0;
+      container.dispatchEvent(new Event('scroll', { bubbles: true }));
     }
     
     await wait(1200);
@@ -474,8 +506,19 @@ async function scrapePerplexity() {
 
 // Listen for scrape request
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === "start-scrape") {
+  if (request.action === "get-state") {
+    sendResponse(scraperState);
+    return true;
+  } else if (request.action === "clear-logs") {
+    scraperState.logs = [];
+    sendResponse({ cleared: true });
+    return true;
+  } else if (request.action === "start-scrape") {
     isCancelled = false;
+    scraperState.status = "running";
+    scraperState.turns = [];
+    scraperState.logs = [];
+    
     injectClipboardHook();
     
     const host = window.location.hostname;
@@ -491,17 +534,21 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     } else if (host.includes("perplexity.ai")) {
       promise = scrapePerplexity();
     } else {
+      scraperState.status = "error";
       chrome.runtime.sendMessage({ action: "error", message: "Unsupported website" });
       return;
     }
 
     promise.then((turns) => {
       if (isCancelled) {
+        scraperState.status = "stopped";
         chrome.runtime.sendMessage({ action: "stopped", turns });
       } else {
+        scraperState.status = "completed";
         chrome.runtime.sendMessage({ action: "finished", turns });
       }
     }).catch((err) => {
+      scraperState.status = "error";
       chrome.runtime.sendMessage({ action: "error", message: err.message });
     });
 
