@@ -82,9 +82,35 @@ def iter_gemini_turns(driver):
                 if text:
                     yield ("user", text)
             else:
-                copy_btn = turn.find_element(
-                    By.CSS_SELECTOR, 'button[aria-label="Copy"]'
-                )
+                selectors = [
+                    'button[aria-label*="Copy" i]',
+                    'button[aria-label*="Salin" i]',
+                    'button[aria-label*="Copiar" i]',
+                    'button[aria-label*="Copier" i]',
+                    'button[aria-label*="Kopieren" i]',
+                    'button[aria-label*="Copia" i]',
+                    'button[title*="Copy" i]',
+                    'button[title*="Salin" i]',
+                    'button[title*="Copiar" i]',
+                    'button[title*="Copier" i]',
+                    'button[title*="Kopieren" i]',
+                    'button[title*="Copia" i]',
+                    'button[data-testid*="copy" i]',
+                ]
+                copy_btn = None
+                try:
+                    copy_btn = turn.find_element(By.CSS_SELECTOR, ", ".join(selectors))
+                except NoSuchElementException:
+                    buttons = turn.find_elements(By.CSS_SELECTOR, "button")
+                    for btn in buttons:
+                        btn_html = btn.get_attribute("innerHTML").lower()
+                        btn_text = btn.text.lower()
+                        if "content_copy" in btn_html or "content_copy" in btn_text or "copy" in btn_text or "salin" in btn_text:
+                            copy_btn = btn
+                            break
+                    if not copy_btn:
+                        raise NoSuchElementException("Copy button not found")
+
                 _safe_click(driver, copy_btn)
                 text = clipboard_hook.read(driver)
                 if text:

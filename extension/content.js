@@ -62,6 +62,41 @@ function injectClipboardHook() {
   script.remove();
 }
 
+// Automatically inject hook at document_start
+injectClipboardHook();
+
+// Helper to find copy button in multiple languages or by material icon name
+function findCopyButton(el) {
+  const selectors = [
+    'button[aria-label*="Copy" i]',
+    'button[aria-label*="Salin" i]',
+    'button[aria-label*="Copiar" i]',
+    'button[aria-label*="Copier" i]',
+    'button[aria-label*="Kopieren" i]',
+    'button[aria-label*="Copia" i]',
+    'button[aria-label*="copy" i]',
+    'button[title*="Copy" i]',
+    'button[title*="Salin" i]',
+    'button[title*="Copiar" i]',
+    'button[title*="Copier" i]',
+    'button[title*="Kopieren" i]',
+    'button[title*="Copia" i]',
+    'button[data-testid*="copy" i]'
+  ];
+  let btn = el.querySelector(selectors.join(', '));
+  if (btn) return btn;
+
+  const buttons = el.querySelectorAll('button');
+  for (const b of buttons) {
+    const html = b.innerHTML.toLowerCase();
+    const text = b.textContent.toLowerCase();
+    if (html.includes('content_copy') || text.includes('content_copy') || text.includes('copy') || text.includes('salin')) {
+      return b;
+    }
+  }
+  return null;
+}
+
 // Helper to wait
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -154,9 +189,7 @@ async function scrapeGemini() {
         turns.push({ role: "user", text });
       }
     } else {
-      const copyBtn = el.querySelector(
-        'button[aria-label*="Copy" i], button[title*="Copy" i], button[data-testid*="copy" i]'
-      );
+      const copyBtn = findCopyButton(el);
 
       let text = null;
       if (copyBtn) text = await captureAfterClick(() => safeClick(copyBtn));
