@@ -73,6 +73,22 @@ function injectClipboardHook() {
 // Automatically inject hook at document_start
 injectClipboardHook();
 
+// Control state
+let isCancelled = false;
+
+// Helpers to communicate with dashboard
+function sendLog(level, text) {
+  try {
+    chrome.runtime.sendMessage({ action: "log", level, text });
+  } catch (e) {}
+}
+
+function sendTurn(turn) {
+  try {
+    chrome.runtime.sendMessage({ action: "turn", turn });
+  } catch (e) {}
+}
+
 // Helper to find copy button in multiple languages or by material icon name
 function findCopyButton(el) {
   const selectors = [
@@ -141,17 +157,23 @@ function captureAfterClick(clickFn, timeout = 3000) {
 async function scrapeClaude() {
   const turns = [];
   const groups = document.querySelectorAll('[role="group"][aria-label="Message actions"]');
+  sendLog("info", `Found ${groups.length} turns in Claude. Starting extraction...`);
 
   for (let i = 0; i < groups.length; i++) {
+    if (isCancelled) break;
+    
     const group = groups[i];
     const isResponse = group.querySelector('button[aria-label="Give positive feedback"]') !== null;
     const copyBtn = group.querySelector('button[data-testid="action-bar-copy"]');
 
     if (!copyBtn) continue;
 
+    sendLog("info", `Copying turn ${i + 1}/${groups.length}...`);
     const text = await captureAfterClick(() => safeClick(copyBtn));
     if (text) {
-      turns.push({ role: isResponse ? "response" : "user", text });
+      const turn = { role: isResponse ? "response" : "user", text };
+      turns.push(turn);
+      sendTurn(turn);
     }
   }
 
@@ -160,11 +182,18 @@ async function scrapeClaude() {
 
 // Auto-scroll to top to load full history for Gemini
 async function loadFullHistoryGemini() {
+  sendLog("info", "Checking conversation history loading state...");
   const container = document.querySelector('gmat-main-content, main, .chat-history, .conversation-container') || window;
   let lastTurnCount = document.querySelectorAll("user-query").length;
   let stableCount = 0;
   
   for (let i = 0; i < 40; i++) {
+    if (isCancelled) {
+      sendLog("warn", "History load cancelled by user.");
+      return;
+    }
+    
+    sendLog("info", `Scrolling up to fetch older turns (attempt ${i + 1}/40)...`);
     if (container === window) {
       window.scrollTo({ top: 0, behavior: 'instant' });
     } else {
@@ -175,14 +204,19 @@ async function loadFullHistoryGemini() {
     
     const currentTurnCount = document.querySelectorAll("user-query").length;
     if (currentTurnCount > lastTurnCount) {
+      sendLog("info", `New turns loaded! Total turns in DOM: ${currentTurnCount}`);
       lastTurnCount = currentTurnCount;
       stableCount = 0;
     } else {
       const loadingSpinner = document.querySelector('mat-progress-spinner, [role="progressbar"], .loading');
       if (!loadingSpinner) {
         stableCount++;
-        if (stableCount >= 2) break;
+        if (stableCount >= 2) {
+          sendLog("success", "Reached top of the conversation. All history loaded.");
+          break;
+        }
       } else {
+        sendLog("info", "Loading spinner detected, waiting for response...");
         stableCount = 0;
       }
     }
@@ -191,8 +225,12 @@ async function loadFullHistoryGemini() {
 
 async function scrapeGemini() {
   await loadFullHistoryGemini();
+  if (isCancelled) return [];
+
+  sendLog("info", "Starting extraction of message content...");
   const turns = [];
   const elements = document.querySelectorAll("user-query, model-response");
+  sendLog("info", `Total elements to parse: ${elements.length}`);
 
   const normalizeUserText = (text) => {
     const lines = String(text || "")
@@ -218,6 +256,8 @@ async function scrapeGemini() {
   };
 
   for (let i = 0; i < elements.length; i++) {
+    if (isCancelled) break;
+    
     const el = elements[i];
     const tag = el.tagName.toLowerCase();
 
@@ -226,22 +266,32 @@ async function scrapeGemini() {
       const rawText = textEl ? textEl.innerText : el.innerText;
       const text = normalizeUserText(rawText);
       if (text) {
-        turns.push({ role: "user", text });
+        const turn = { role: "user", text };
+        turns.push(turn);
+        sendTurn(turn);
       }
     } else {
       const copyBtn = findCopyButton(el);
 
       let text = null;
-      if (copyBtn) text = await captureAfterClick(() => safeClick(copyBtn));
+      if (copyBtn) {
+        sendLog("info", `Copying response ${i + 1}/${elements.length}...`);
+        text = await captureAfterClick(() => safeClick(copyBtn));
+      }
 
       if (text) {
-        turns.push({ role: "response", text });
+        const turn = { role: "response", text };
+        turns.push(turn);
+        sendTurn(turn);
         continue;
       }
 
+      sendLog("warn", `Clipboard capture missed turn ${i + 1}. Using innerText fallback (math formatting may be lost).`);
       const fallback = normalizeResponseText(el.innerText);
       if (fallback) {
-        turns.push({ role: "response", text: fallback });
+        const turn = { role: "response", text: fallback };
+        turns.push(turn);
+        sendTurn(turn);
       }
     }
   }
@@ -252,15 +302,20 @@ async function scrapeGemini() {
 async function scrapeAISudio() {
   const turns = [];
   const chatTurns = document.querySelectorAll("ms-chat-turn");
+  sendLog("info", `Found ${chatTurns.length} turns in AI Studio. Starting extraction...`);
 
   for (let i = 0; i < chatTurns.length; i++) {
+    if (isCancelled) break;
+
     const turn = chatTurns[i];
     const userChunk = turn.querySelector("ms-prompt-chunk, [data-turn-role='user']");
 
     if (userChunk) {
       const text = turn.innerText.trim();
       if (text) {
-        turns.push({ role: "user", text });
+        const turnObj = { role: "user", text };
+        turns.push(turnObj);
+        sendTurn(turnObj);
       }
     } else {
       let copyBtn = turn.querySelector('button[aria-label*="markdown" i], button[aria-label*="Copy" i]');
@@ -268,6 +323,7 @@ async function scrapeAISudio() {
       if (!copyBtn) {
         const menuBtn = turn.querySelector('button[aria-label*="more" i]');
         if (menuBtn) {
+          sendLog("info", `AI Studio turn ${i + 1}: Opening context menu...`);
           safeClick(menuBtn);
           await wait(200);
           const menuItems = Array.from(document.querySelectorAll("span, button, div"));
@@ -275,11 +331,17 @@ async function scrapeAISudio() {
         }
       }
 
-      if (!copyBtn) continue;
+      if (!copyBtn) {
+        sendLog("warn", `AI Studio turn ${i + 1}: Copy button not found.`);
+        continue;
+      }
 
+      sendLog("info", `AI Studio turn ${i + 1}: Copying markdown...`);
       const text = await captureAfterClick(() => safeClick(copyBtn));
       if (text) {
-        turns.push({ role: "response", text });
+        const turnObj = { role: "response", text };
+        turns.push(turnObj);
+        sendTurn(turnObj);
       }
     }
   }
@@ -290,6 +352,7 @@ async function scrapeAISudio() {
 async function scrapePerplexity() {
   const turns = [];
   const root = document.querySelector("main") || document.body;
+  sendLog("info", "Starting Perplexity extraction...");
 
   const normalizeUserText = (text) => {
     const lines = String(text || "")
@@ -327,7 +390,9 @@ async function scrapePerplexity() {
     const key = `${role}\u0000${t}`;
     if (seen.has(key)) return;
     seen.add(key);
-    turns.push({ role, text: t });
+    const turnObj = { role, text: t };
+    turns.push(turnObj);
+    sendTurn(turnObj);
   };
 
   const getTurnContainer = (btn, role) => {
@@ -375,9 +440,14 @@ async function scrapePerplexity() {
     return 0;
   });
 
+  sendLog("info", `Found ${items.length} interactive elements on Perplexity.`);
+
   for (const item of items) {
+    if (isCancelled) break;
+    
     let text = null;
     if (item.btn) {
+      sendLog("info", `Perplexity: Copying item (${item.role})...`);
       text = await captureAfterClick(() => safeClick(item.btn));
     }
 
@@ -386,6 +456,7 @@ async function scrapePerplexity() {
       continue;
     }
 
+    sendLog("warn", `Perplexity: Using DOM fallback for ${item.role}.`);
     if (item.role === "user") {
       pushTurn("user", normalizeUserText(item.container?.innerText || ""));
     } else {
@@ -403,11 +474,13 @@ async function scrapePerplexity() {
 
 // Listen for scrape request
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === "scrape") {
+  if (request.action === "start-scrape") {
+    isCancelled = false;
     injectClipboardHook();
     
     const host = window.location.hostname;
     let promise;
+    sendLog("info", `Starting extraction on ${host}...`);
 
     if (host.includes("claude.ai")) {
       promise = scrapeClaude();
@@ -418,16 +491,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     } else if (host.includes("perplexity.ai")) {
       promise = scrapePerplexity();
     } else {
-      sendResponse({ success: false, error: "Unsupported website" });
-      return true;
+      chrome.runtime.sendMessage({ action: "error", message: "Unsupported website" });
+      return;
     }
 
     promise.then((turns) => {
-      sendResponse({ success: true, turns });
+      if (isCancelled) {
+        chrome.runtime.sendMessage({ action: "stopped", turns });
+      } else {
+        chrome.runtime.sendMessage({ action: "finished", turns });
+      }
     }).catch((err) => {
-      sendResponse({ success: false, error: err.message });
+      chrome.runtime.sendMessage({ action: "error", message: err.message });
     });
 
-    return true; // Keep message channel open for async response
+    sendResponse({ started: true });
+    return true; 
+  } else if (request.action === "stop-scrape") {
+    isCancelled = true;
+    sendLog("warn", "Stop signal received. Cancelling execution...");
+    sendResponse({ stopped: true });
+    return true;
   }
 });

@@ -2,62 +2,158 @@
 <html>
 <head>
   <meta charset="utf-8">
+  <title>Chat XML Exporter - Dashboard & Debugger</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-color: #0f172a;
-      --card-bg: rgba(30, 41, 59, 0.7);
-      --border-color: rgba(255, 255, 255, 0.1);
-      --text-main: #f8fafc;
-      --text-muted: #94a3b8;
-      --primary: #6366f1;
-      --primary-hover: #4f46e5;
+      --bg-color: #0b0f19;
+      --card-bg: rgba(17, 24, 39, 0.7);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --primary: #4f46e5;
+      --primary-hover: #4338ca;
       --success: #10b981;
+      --success-hover: #059669;
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --console-bg: #030712;
+      --console-border: rgba(99, 102, 241, 0.15);
       --user-tag: #3b82f6;
       --assistant-tag: #10b981;
     }
 
-    body {
-      width: 320px;
+    * {
+      box-sizing: border-box;
       margin: 0;
-      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      padding: 0;
+    }
+
+    body {
+      width: 100vw;
+      height: 100vh;
+      font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background-color: var(--bg-color);
       color: var(--text-main);
       display: flex;
       flex-direction: column;
-      box-sizing: border-box;
-      padding: 16px;
+      overflow: hidden;
+      padding: 24px;
     }
 
-    h3 {
-      margin: 0 0 16px 0;
-      font-size: 18px;
-      font-weight: 600;
-      background: linear-gradient(135deg, #a5b4fc, #6366f1);
+    /* Header styling */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 700;
+      background: linear-gradient(135deg, #a5b4fc, #6366f1, #818cf8);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       letter-spacing: -0.025em;
     }
 
+    .status-badge {
+      padding: 6px 12px;
+      border-radius: 9999px;
+      font-size: 13px;
+      font-weight: 500;
+      background-color: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-color);
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: #6b7280;
+      box-shadow: 0 0 8px #6b7280;
+      transition: all 0.3s ease;
+    }
+
+    .status-dot.active {
+      background-color: var(--success);
+      box-shadow: 0 0 10px var(--success);
+    }
+
+    .status-dot.running {
+      background-color: #f59e0b;
+      box-shadow: 0 0 10px #f59e0b;
+      animation: pulse 1.5s infinite alternate;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(1); opacity: 0.6; }
+      100% { transform: scale(1.25); opacity: 1; }
+    }
+
+    /* Dashboard Layout */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 20px;
+      flex-grow: 1;
+      height: calc(100% - 70px);
+    }
+
+    .panel {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      backdrop-filter: blur(20px);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    }
+
+    .panel-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-main);
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    /* Left Panel: Controls + Console */
+    .controls-wrapper {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
     .btn {
-      width: 100%;
-      background-color: var(--primary);
-      color: white;
+      flex-grow: 1;
       border: none;
-      padding: 10px 16px;
+      padding: 12px 20px;
       border-radius: 8px;
       font-size: 14px;
-      font-weight: 500;
+      font-weight: 600;
       cursor: pointer;
       transition: all 0.2s ease;
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
-      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
     }
 
     .btn:hover:not(:disabled) {
-      background-color: var(--primary-hover);
       transform: translateY(-1px);
     }
 
@@ -65,68 +161,143 @@
       transform: translateY(0);
     }
 
+    .btn-start {
+      background-color: var(--primary);
+      color: white;
+    }
+    .btn-start:hover:not(:disabled) {
+      background-color: var(--primary-hover);
+    }
+
+    .btn-stop {
+      background-color: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: var(--danger);
+    }
+    .btn-stop:hover:not(:disabled) {
+      background-color: var(--danger);
+      color: white;
+    }
+
+    .btn-download {
+      background-color: var(--success);
+      color: white;
+    }
+    .btn-download:hover:not(:disabled) {
+      background-color: var(--success-hover);
+    }
+
     .btn:disabled {
-      background-color: #334155;
-      color: #64748b;
+      background-color: #1e293b;
+      border: 1px solid rgba(255, 255, 255, 0.03);
+      color: #475569;
       cursor: not-allowed;
       box-shadow: none;
     }
 
-    #status {
-      margin-top: 12px;
-      font-size: 13px;
-      color: var(--text-muted);
-      text-align: center;
-      min-height: 18px;
-    }
-
-    .list-container {
-      margin: 16px 0;
-      border: 1px solid var(--border-color);
-      background-color: var(--card-bg);
-      backdrop-filter: blur(12px);
+    /* Monospace Console */
+    .console {
+      flex-grow: 1;
+      background-color: var(--console-bg);
+      border: 1px solid var(--console-border);
       border-radius: 8px;
-      max-height: 200px;
+      padding: 14px;
+      font-family: 'Fira Code', monospace;
+      font-size: 12px;
+      line-height: 1.6;
       overflow-y: auto;
-      padding: 8px;
       display: flex;
       flex-direction: column;
       gap: 6px;
     }
 
-    .list-container::-webkit-scrollbar {
+    .console-line {
+      display: flex;
+      gap: 10px;
+      word-break: break-all;
+    }
+
+    .console-time {
+      color: #4b5563;
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    .console-text {
+      color: #9ca3af;
+    }
+
+    .console-text.info {
+      color: #a5b4fc;
+    }
+
+    .console-text.success {
+      color: #34d399;
+    }
+
+    .console-text.warn {
+      color: #fbbf24;
+    }
+
+    .console-text.error {
+      color: #f87171;
+    }
+
+    /* Right Panel: Turns Preview */
+    .turns-list {
+      flex-grow: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding-right: 4px;
+    }
+
+    .turns-list::-webkit-scrollbar, .console::-webkit-scrollbar {
       width: 6px;
     }
 
-    .list-container::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.1);
+    .turns-list::-webkit-scrollbar-thumb, .console::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.08);
       border-radius: 3px;
     }
 
-    .list-container:empty::after {
-      content: 'No preview yet. Open popup on supported chat page.';
+    .turns-list:empty::after {
+      content: 'No turns extracted yet. Press "Start Scrape" to begin.';
       display: block;
-      padding: 16px;
+      padding: 40px;
       text-align: center;
-      font-size: 12px;
+      font-size: 13px;
       color: var(--text-muted);
     }
 
     .turn-item {
       display: flex;
-      align-items: center;
+      flex-direction: column;
+      gap: 6px;
+      padding: 12px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      font-size: 13px;
+    }
+
+    .turn-header {
+      display: flex;
       justify-content: space-between;
-      padding: 6px 10px;
-      border-radius: 6px;
-      background: rgba(255, 255, 255, 0.03);
-      border: 1px solid rgba(255, 255, 255, 0.02);
-      font-size: 12px;
+      align-items: center;
+    }
+
+    .turn-index {
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 500;
     }
 
     .tag-badge {
       font-weight: 600;
       font-family: monospace;
-      padding: 2px 6px;
+      padding: 2px 8px;
       border-radius: 4px;
       font-size: 11px;
     }
@@ -143,20 +314,63 @@
       border: 1px solid rgba(16, 185, 129, 0.3);
     }
 
-    .turn-index {
+    .turn-preview-text {
+      font-size: 12px;
       color: var(--text-muted);
+      white-space: pre-wrap;
+      max-height: 80px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      display: -webkit-box;
+      -webkit-line-clamp: 4;
+      -webkit-box-orient: vertical;
     }
   </style>
 </head>
 <body>
-  <h3>Chat XML Exporter</h3>
-  <button id="download-btn" class="btn" style="margin-top: 12px;" disabled>
-    Download XML
-  </button>
+  <header>
+    <h1>Chat XML Exporter - Dashboard</h1>
+    <div class="status-badge">
+      <div id="status-dot" class="status-dot"></div>
+      <span id="status-text">Connected</span>
+    </div>
+  </header>
 
-  <div id="preview-list" class="list-container" style="margin-top: 12px;"></div>
+  <div class="dashboard-grid">
+    <!-- Left panel -->
+    <div class="panel">
+      <div class="panel-title">Console & Controls</div>
+      <div class="controls-wrapper">
+        <button id="start-btn" class="btn btn-start">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Start Scrape
+        </button>
+        <button id="stop-btn" class="btn btn-stop" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
+          Stop
+        </button>
+        <button id="download-btn" class="btn btn-download" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Download XML
+        </button>
+      </div>
+      <div id="console" class="console">
+        <div class="console-line">
+          <span class="console-time">[00:00:00]</span>
+          <span class="console-text success">Dashboard loaded. Ready to monitor extraction process.</span>
+        </div>
+      </div>
+    </div>
 
-  <div id="status">Ready</div>
+    <!-- Right panel -->
+    <div class="panel">
+      <div class="panel-title">
+        <span>Extracted Turns</span>
+        <span id="turns-counter" style="font-size: 13px; font-weight: normal; color: var(--text-muted);">0 turns</span>
+      </div>
+      <div id="preview-list" class="turns-list"></div>
+    </div>
+  </div>
 
   <script src="popup.js"></script>
 </body>
