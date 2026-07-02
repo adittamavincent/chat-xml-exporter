@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Chat XML Exporter - Dashboard & Debugger</title>
+  <title>Chat XML Exporter - Debugger</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -32,125 +32,90 @@
     }
 
     body {
-      width: 100vw;
-      height: 100vh;
+      width: 520px;
+      height: 580px;
       font-family: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background-color: var(--bg-color);
       color: var(--text-main);
       display: flex;
       flex-direction: column;
       overflow: hidden;
-      padding: 24px;
+      padding: 16px;
     }
 
-    /* Header styling */
     header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 20px;
-      padding-bottom: 16px;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
       border-bottom: 1px solid var(--border-color);
     }
 
     h1 {
-      font-size: 24px;
+      font-size: 18px;
       font-weight: 700;
-      background: linear-gradient(135deg, #a5b4fc, #6366f1, #818cf8);
+      background: linear-gradient(135deg, #a5b4fc, #6366f1);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       letter-spacing: -0.025em;
     }
 
     .status-badge {
-      padding: 6px 12px;
+      padding: 4px 10px;
       border-radius: 9999px;
-      font-size: 13px;
+      font-size: 11px;
       font-weight: 500;
       background-color: rgba(255, 255, 255, 0.05);
       border: 1px solid var(--border-color);
       color: var(--text-muted);
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
     }
 
     .status-dot {
-      width: 8px;
-      height: 8px;
+      width: 6px;
+      height: 6px;
       border-radius: 50%;
       background-color: #6b7280;
-      box-shadow: 0 0 8px #6b7280;
-      transition: all 0.3s ease;
     }
 
     .status-dot.active {
       background-color: var(--success);
-      box-shadow: 0 0 10px var(--success);
+      box-shadow: 0 0 8px var(--success);
     }
 
     .status-dot.running {
       background-color: #f59e0b;
-      box-shadow: 0 0 10px #f59e0b;
+      box-shadow: 0 0 8px #f59e0b;
       animation: pulse 1.5s infinite alternate;
     }
 
     @keyframes pulse {
       0% { transform: scale(1); opacity: 0.6; }
-      100% { transform: scale(1.25); opacity: 1; }
+      100% { transform: scale(1.2); opacity: 1; }
     }
 
-    /* Dashboard Layout */
-    .dashboard-grid {
-      display: grid;
-      grid-template-columns: 1.2fr 0.8fr;
-      gap: 20px;
-      flex-grow: 1;
-      height: calc(100% - 70px);
-    }
-
-    .panel {
-      background-color: var(--card-bg);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      backdrop-filter: blur(20px);
-      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-    }
-
-    .panel-title {
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--text-main);
-      margin-bottom: 12px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-
-    /* Left Panel: Controls + Console */
     .controls-wrapper {
       display: flex;
-      gap: 12px;
-      margin-bottom: 16px;
+      gap: 8px;
+      margin-bottom: 12px;
     }
 
     .btn {
       flex-grow: 1;
       border: none;
-      padding: 12px 20px;
-      border-radius: 8px;
-      font-size: 14px;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 12px;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s ease;
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 8px;
+      gap: 6px;
     }
 
     .btn:hover:not(:disabled) {
@@ -170,8 +135,8 @@
     }
 
     .btn-stop {
-      background-color: rgba(239, 68, 68, 0.15);
-      border: 1px solid rgba(239, 68, 68, 0.3);
+      background-color: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.25);
       color: var(--danger);
     }
     .btn-stop:hover:not(:disabled) {
@@ -192,94 +157,104 @@
       border: 1px solid rgba(255, 255, 255, 0.03);
       color: #475569;
       cursor: not-allowed;
-      box-shadow: none;
     }
 
-    /* Monospace Console */
+    .section-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .console-wrapper {
+      flex-grow: 3;
+      min-height: 180px;
+      display: flex;
+      flex-direction: column;
+      margin-bottom: 12px;
+    }
+
     .console {
       flex-grow: 1;
       background-color: var(--console-bg);
       border: 1px solid var(--console-border);
       border-radius: 8px;
-      padding: 14px;
+      padding: 10px;
       font-family: 'Fira Code', monospace;
-      font-size: 12px;
-      line-height: 1.6;
+      font-size: 11px;
+      line-height: 1.5;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .console-line {
+      display: flex;
+      gap: 8px;
+    }
+
+    .console-time {
+      color: #4b5563;
+      flex-shrink: 0;
+    }
+
+    .console-text {
+      color: #9ca3af;
+      word-break: break-all;
+    }
+
+    .console-text.info { color: #a5b4fc; }
+    .console-text.success { color: #34d399; }
+    .console-text.warn { color: #fbbf24; }
+    .console-text.error { color: #f87171; }
+
+    .preview-wrapper {
+      flex-grow: 2;
+      min-height: 140px;
+      display: flex;
+      flex-direction: column;
+      border-top: 1px solid var(--border-color);
+      padding-top: 10px;
+    }
+
+    .turns-list {
+      flex-grow: 1;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
       gap: 6px;
     }
 
-    .console-line {
-      display: flex;
-      gap: 10px;
-      word-break: break-all;
-    }
-
-    .console-time {
-      color: #4b5563;
-      flex-shrink: 0;
-      user-select: none;
-    }
-
-    .console-text {
-      color: #9ca3af;
-    }
-
-    .console-text.info {
-      color: #a5b4fc;
-    }
-
-    .console-text.success {
-      color: #34d399;
-    }
-
-    .console-text.warn {
-      color: #fbbf24;
-    }
-
-    .console-text.error {
-      color: #f87171;
-    }
-
-    /* Right Panel: Turns Preview */
-    .turns-list {
-      flex-grow: 1;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      padding-right: 4px;
-    }
-
     .turns-list::-webkit-scrollbar, .console::-webkit-scrollbar {
-      width: 6px;
+      width: 4px;
     }
 
     .turns-list::-webkit-scrollbar-thumb, .console::-webkit-scrollbar-thumb {
       background: rgba(255, 255, 255, 0.08);
-      border-radius: 3px;
+      border-radius: 2px;
     }
 
     .turns-list:empty::after {
       content: 'No turns extracted yet. Press "Start Scrape" to begin.';
       display: block;
-      padding: 40px;
+      padding: 20px;
       text-align: center;
-      font-size: 13px;
+      font-size: 11px;
       color: var(--text-muted);
     }
 
     .turn-item {
       display: flex;
       flex-direction: column;
-      gap: 6px;
-      padding: 12px;
-      border-radius: 8px;
+      gap: 4px;
+      padding: 8px;
+      border-radius: 6px;
       background: rgba(255, 255, 255, 0.02);
-      border: 1px solid rgba(255, 255, 255, 0.04);
-      font-size: 13px;
+      border: 1px solid rgba(255, 255, 255, 0.03);
+      font-size: 11px;
     }
 
     .turn-header {
@@ -290,86 +265,81 @@
 
     .turn-index {
       color: var(--text-muted);
-      font-size: 11px;
       font-weight: 500;
     }
 
     .tag-badge {
       font-weight: 600;
       font-family: monospace;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 11px;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-size: 9px;
     }
 
     .tag-user {
-      background-color: rgba(59, 130, 246, 0.15);
+      background-color: rgba(59, 130, 246, 0.12);
       color: #93c5fd;
-      border: 1px solid rgba(59, 130, 246, 0.3);
+      border: 1px solid rgba(59, 130, 246, 0.25);
     }
 
     .tag-response {
-      background-color: rgba(16, 185, 129, 0.15);
+      background-color: rgba(16, 185, 129, 0.12);
       color: #6ee7b7;
-      border: 1px solid rgba(16, 185, 129, 0.3);
+      border: 1px solid rgba(16, 185, 129, 0.25);
     }
 
     .turn-preview-text {
-      font-size: 12px;
       color: var(--text-muted);
       white-space: pre-wrap;
-      max-height: 80px;
+      max-height: 48px;
       overflow: hidden;
       text-overflow: ellipsis;
       display: -webkit-box;
-      -webkit-line-clamp: 4;
+      -webkit-line-clamp: 3;
       -webkit-box-orient: vertical;
     }
   </style>
 </head>
 <body>
   <header>
-    <h1>Chat XML Exporter - Dashboard</h1>
+    <h1>Chat XML Exporter</h1>
     <div class="status-badge">
       <div id="status-dot" class="status-dot"></div>
-      <span id="status-text">Connected</span>
+      <span id="status-text">Connecting...</span>
     </div>
   </header>
 
-  <div class="dashboard-grid">
-    <!-- Left panel -->
-    <div class="panel">
-      <div class="panel-title">Console & Controls</div>
-      <div class="controls-wrapper">
-        <button id="start-btn" class="btn btn-start">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-          Start Scrape
-        </button>
-        <button id="stop-btn" class="btn btn-stop" disabled>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
-          Stop
-        </button>
-        <button id="download-btn" class="btn btn-download" disabled>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Download XML
-        </button>
-      </div>
-      <div id="console" class="console">
-        <div class="console-line">
-          <span class="console-time">[00:00:00]</span>
-          <span class="console-text success">Dashboard loaded. Ready to monitor extraction process.</span>
-        </div>
-      </div>
-    </div>
+  <div class="controls-wrapper">
+    <button id="start-btn" class="btn btn-start">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      Start Scrape
+    </button>
+    <button id="stop-btn" class="btn btn-stop" disabled>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
+      Stop
+    </button>
+    <button id="download-btn" class="btn btn-download" disabled>
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Download XML
+    </button>
+  </div>
 
-    <!-- Right panel -->
-    <div class="panel">
-      <div class="panel-title">
-        <span>Extracted Turns</span>
-        <span id="turns-counter" style="font-size: 13px; font-weight: normal; color: var(--text-muted);">0 turns</span>
+  <div class="console-wrapper">
+    <div class="section-title">Console Output</div>
+    <div id="console" class="console">
+      <div class="console-line">
+        <span class="console-time">[00:00:00]</span>
+        <span class="console-text success">Ready to scrape. Make sure active page has conversation loaded.</span>
       </div>
-      <div id="preview-list" class="turns-list"></div>
     </div>
+  </div>
+
+  <div class="preview-wrapper">
+    <div class="section-title" style="display: flex; justify-content: space-between;">
+      <span>Extracted Turns</span>
+      <span id="turns-counter" style="font-weight: normal; text-transform: none;">0 turns</span>
+    </div>
+    <div id="preview-list" class="turns-list"></div>
   </div>
 
   <script src="popup.js"></script>

@@ -28,8 +28,7 @@
       "run_at": "document_start"
     }
   ],
-  "background": {
-    "service_worker": "background.js"
-  },
-  "action": {}
+  "action": {
+    "default_popup": "popup.html"
+  }
 }

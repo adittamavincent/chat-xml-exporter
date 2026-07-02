@@ -10,28 +10,29 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   let extractedTurns = [];
   
-  // Extract targetTabId from URL
-  const urlParams = new URLSearchParams(window.location.search);
-  const targetTabId = parseInt(urlParams.get("targetTabId"), 10);
-
-  if (!targetTabId || isNaN(targetTabId)) {
-    log("error", "Error: No target tab ID specified in URL.");
-    updateStatus("Error", "active");
-    startBtn.disabled = true;
-    return;
-  }
-
-  // Check connection to target tab
+  // Get current active tab
+  let targetTabId = null;
   try {
-    const tab = await chrome.tabs.get(targetTabId);
-    if (!tab) {
-      throw new Error("Tab not found");
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (!tab || !tab.id) {
+      throw new Error("No active tab found");
     }
+    targetTabId = tab.id;
     const host = new URL(tab.url).hostname;
-    log("info", `Connected to tab #${targetTabId} (${host})`);
+    
+    // Check if site is supported
+    const supported = ["claude.ai", "gemini.google.com", "aistudio.google.com", "perplexity.ai"].some(h => host.includes(h));
+    if (!supported) {
+      log("error", "Error: Open Claude, Gemini, AI Studio, or Perplexity first.");
+      updateStatus("Unsupported Site", "");
+      startBtn.disabled = true;
+      return;
+    }
+
+    log("info", `Connected to active tab (${host})`);
     updateStatus("Connected", "active");
   } catch (err) {
-    log("error", `Error: Target tab #${targetTabId} not accessible. Make sure it is open and active.`);
+    log("error", "Error: Cannot access active tab.");
     updateStatus("Disconnected", "");
     startBtn.disabled = true;
     return;
