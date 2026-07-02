@@ -1,7 +1,9 @@
 document.addEventListener("DOMContentLoaded", async () => {
   const statusTextEl = document.getElementById("status-text");
   const statusDotEl = document.getElementById("status-dot");
+  const detectBtn = document.getElementById("detect-btn");
   const startBtn = document.getElementById("start-btn");
+  const forceStartBtn = document.getElementById("force-start-btn");
   const stopBtn = document.getElementById("stop-btn");
   const downloadBtn = document.getElementById("download-btn");
   const previewList = document.getElementById("preview-list");
@@ -26,25 +28,34 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!supported) {
       log("error", "Error: Open Claude, Gemini, AI Studio, or Perplexity first.");
       updateStatus("Unsupported Site", "");
+      detectBtn.disabled = true;
       startBtn.disabled = true;
+      forceStartBtn.disabled = true;
+      stopBtn.disabled = true;
+      downloadBtn.disabled = true;
       return;
     }
 
     log("info", `Connected to active tab (${host})`);
-    updateStatus("Connected", "active");
+    updateStatus("Ready to Detect", "active");
     
     // Retrieve scraper state if it was already running/completed in the page
     getScraperState();
   } catch (err) {
     log("error", "Error: Cannot access active tab.");
     updateStatus("Disconnected", "");
+    detectBtn.disabled = true;
     startBtn.disabled = true;
+    forceStartBtn.disabled = true;
+    stopBtn.disabled = true;
+    downloadBtn.disabled = true;
     return;
   }
 
   // Log function helper
   function log(level, text, timeStr) {
     const tStr = timeStr || new Date().toTimeString().split(' ')[0];
+    const shouldAutoScroll = isNearBottom(consoleEl);
     
     const line = document.createElement("div");
     line.className = "console-line";
@@ -61,54 +72,97 @@ document.addEventListener("DOMContentLoaded", async () => {
     line.appendChild(textSpan);
     consoleEl.appendChild(line);
     
-    // Auto scroll to bottom
-    consoleEl.scrollTop = consoleEl.scrollHeight;
+    if (shouldAutoScroll) {
+      consoleEl.scrollTop = consoleEl.scrollHeight;
+    }
+  }
+
+  function isNearBottom(element, threshold = 24) {
+    const distanceFromBottom =
+      element.scrollHeight - element.scrollTop - element.clientHeight;
+    return distanceFromBottom <= threshold;
   }
 
   function updateStatus(text, state) {
     statusTextEl.textContent = text;
     statusDotEl.className = "status-dot";
-    if (state === "active") {
+    if (state === "active" || state === "ready") {
       statusDotEl.classList.add("active");
-    } else if (state === "running") {
+    } else if (state === "running" || state === "detecting") {
       statusDotEl.classList.add("running");
     }
   }
 
   function updateScraperStatus(status) {
     switch (status) {
+      case "detecting":
+        updateStatus("Detecting", "detecting");
+        detectBtn.disabled = false;
+        startBtn.disabled = true;
+        forceStartBtn.disabled = false;
+        stopBtn.disabled = false;
+        downloadBtn.disabled = true;
+        break;
+      case "ready":
+        updateStatus("Ready to Start", "ready");
+        detectBtn.disabled = false;
+        startBtn.disabled = false;
+        forceStartBtn.disabled = true;
+        stopBtn.disabled = true;
+        downloadBtn.disabled = extractedTurns.length === 0;
+        break;
       case "running":
         updateStatus("Running", "running");
+        detectBtn.disabled = true;
         startBtn.disabled = true;
+        forceStartBtn.disabled = true;
         stopBtn.disabled = false;
         downloadBtn.disabled = true;
         break;
       case "completed":
         updateStatus("Completed", "active");
+        detectBtn.disabled = false;
         startBtn.disabled = false;
+        forceStartBtn.disabled = true;
         stopBtn.disabled = true;
         downloadBtn.disabled = extractedTurns.length === 0;
         break;
       case "stopped":
         updateStatus("Stopped", "active");
+        detectBtn.disabled = false;
         startBtn.disabled = false;
+        forceStartBtn.disabled = true;
         stopBtn.disabled = true;
         downloadBtn.disabled = extractedTurns.length === 0;
         break;
       case "error":
         updateStatus("Error", "active");
+        detectBtn.disabled = false;
         startBtn.disabled = false;
+        forceStartBtn.disabled = true;
         stopBtn.disabled = true;
         downloadBtn.disabled = extractedTurns.length === 0;
         break;
       case "idle":
       default:
-        updateStatus("Connected", "active");
-        startBtn.disabled = false;
+        updateStatus("Ready to Detect", "active");
+        detectBtn.disabled = false;
+        startBtn.disabled = true;
+        forceStartBtn.disabled = true;
         stopBtn.disabled = true;
-        downloadBtn.disabled = true;
+        downloadBtn.disabled = extractedTurns.length === 0;
         break;
     }
+  }
+
+  function clearPreview() {
+    extractedTurns = [];
+    previewList.innerHTML = "";
+    turnsCounterEl.textContent = "0 turns";
+  }
+
+  function clearConsole() {
+    consoleEl.innerHTML = "";
   }
 
   function getScraperState() {
@@ -136,6 +190,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   function renderTurn(turn, idx) {
+    const shouldAutoScroll = isNearBottom(previewList);
     const item = document.createElement("div");
     item.className = "turn-item";
     
@@ -160,7 +215,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     item.appendChild(header);
     item.appendChild(preview);
     previewList.appendChild(item);
-    previewList.scrollTop = previewList.scrollHeight;
+    if (shouldAutoScroll) {
+      previewList.scrollTop = previewList.scrollHeight;
+    }
   }
 
   // Listen for messages from content script
@@ -178,14 +235,22 @@ document.addEventListener("DOMContentLoaded", async () => {
         renderTurn(message.turn, extractedTurns.length - 1);
         turnsCounterEl.textContent = `${extractedTurns.length} turns`;
         break;
+      case "detect-finished":
+        log("success", `Detect finished. ${message.detectedTurns || 0} Gemini nodes ready.`);
+        updateScraperStatus("ready");
+        break;
       case "finished":
         log("success", `Scraping completed! Successfully extracted ${message.turns.length} turns.`);
         extractedTurns = message.turns;
         updateScraperStatus("completed");
         break;
       case "stopped":
-        log("warn", `Scraping stopped by user. Extracted ${message.turns.length} turns so far.`);
-        extractedTurns = message.turns;
+        if (message.mode === "detect") {
+          log("warn", "Detect stopped by user.");
+        } else {
+          log("warn", `Scraping stopped by user. Extracted ${message.turns.length} turns so far.`);
+          extractedTurns = message.turns;
+        }
         updateScraperStatus("stopped");
         break;
       case "error":
@@ -196,18 +261,57 @@ document.addEventListener("DOMContentLoaded", async () => {
   });
 
   // Action Button Listeners
+  detectBtn.addEventListener("click", () => {
+    clearConsole();
+    log("info", "Starting detect phase...");
+    updateScraperStatus("detecting");
+
+    chrome.tabs.sendMessage(targetTabId, { action: "start-detect" }, () => {
+      if (chrome.runtime.lastError) {
+        log("error", `Could not detect: ${chrome.runtime.lastError.message}. Try reloading the chat page.`);
+        updateScraperStatus("idle");
+      }
+    });
+  });
+
   startBtn.addEventListener("click", () => {
-    extractedTurns = [];
-    previewList.innerHTML = "";
-    turnsCounterEl.textContent = "0 turns";
-    
+    clearPreview();
+    clearConsole();
     updateScraperStatus("running");
-    
     log("info", "Starting extraction process...");
 
     chrome.tabs.sendMessage(targetTabId, { action: "start-scrape" }, (response) => {
       if (chrome.runtime.lastError) {
         log("error", `Could not start: ${chrome.runtime.lastError.message}. Try reloading the chat page.`);
+        updateScraperStatus("idle");
+        return;
+      }
+      if (response && response.reason === "detecting") {
+        log("warn", "Detect still running. Wait, or use Force Start.");
+        updateScraperStatus("detecting");
+        return;
+      }
+      if (response && response.reason === "detect_required") {
+        log("warn", "Run detect first before start.");
+        updateScraperStatus("idle");
+      }
+    });
+  });
+
+  forceStartBtn.addEventListener("click", () => {
+    clearPreview();
+    clearConsole();
+    updateScraperStatus("running");
+    log("warn", "Force start requested. Detect phase will be interrupted.");
+
+    chrome.tabs.sendMessage(targetTabId, { action: "force-start-scrape" }, (response) => {
+      if (chrome.runtime.lastError) {
+        log("error", `Could not force start: ${chrome.runtime.lastError.message}. Try reloading the chat page.`);
+        updateScraperStatus("idle");
+        return;
+      }
+      if (response && response.reason === "detect_required") {
+        log("warn", "Detect required before normal start.");
         updateScraperStatus("idle");
       }
     });
@@ -251,7 +355,7 @@ document.addEventListener("DOMContentLoaded", async () => {
           saveAs: false,
           conflictAction: "uniquify"
         },
-        (downloadId) => {
+        () => {
           if (chrome.runtime.lastError) {
             log("error", `Download failed: ${chrome.runtime.lastError.message}`);
             setTimeout(() => URL.revokeObjectURL(url), 30_000);
