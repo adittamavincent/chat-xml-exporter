@@ -16,12 +16,16 @@ INJECT_SCRIPT = """
   window.__capturedClipboard = null;
 
   try {
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      const original = navigator.clipboard.writeText.bind(navigator.clipboard);
-      navigator.clipboard.writeText = function(text) {
-        window.__capturedClipboard = text;
-        return original(text);
-      };
+    if (window.Clipboard && Clipboard.prototype.writeText) {
+      const original = Clipboard.prototype.writeText;
+      Object.defineProperty(Clipboard.prototype, 'writeText', {
+        value: function(text) {
+          window.__capturedClipboard = text;
+          return original.apply(this, arguments);
+        },
+        writable: true,
+        configurable: true
+      });
     }
   } catch (e) {}
 

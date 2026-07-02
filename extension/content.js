@@ -7,40 +7,48 @@ function injectClipboardHook() {
       window.__clipboardHookInstalled = true;
 
       try {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          const original = navigator.clipboard.writeText.bind(navigator.clipboard);
-          navigator.clipboard.writeText = function(text) {
-            document.dispatchEvent(new CustomEvent('captured-clipboard', { detail: text }));
-            return original(text);
-          };
+        if (window.Clipboard && Clipboard.prototype.writeText) {
+          const original = Clipboard.prototype.writeText;
+          Object.defineProperty(Clipboard.prototype, 'writeText', {
+            value: function(text) {
+              document.dispatchEvent(new CustomEvent('captured-clipboard', { detail: text }));
+              return original.apply(this, arguments);
+            },
+            writable: true,
+            configurable: true
+          });
         }
       } catch (e) {}
 
       try {
-        if (navigator.clipboard && navigator.clipboard.write) {
-          const original = navigator.clipboard.write.bind(navigator.clipboard);
-          navigator.clipboard.write = function(items) {
-            try {
-              const first = items && items[0];
-              if (first && typeof first.getType === 'function') {
-                const typeOrder = ['text/plain', 'text/markdown', 'text/html'];
-                const types = Array.isArray(first.types) ? first.types : [];
-                const pick =
-                  typeOrder.find((t) => types.includes(t)) ||
-                  types.find((t) => typeOrder.includes(t)) ||
-                  types[0];
-                if (pick) {
-                  first.getType(pick)
-                    .then((blob) => blob.text())
-                    .then((text) => {
-                      document.dispatchEvent(new CustomEvent('captured-clipboard', { detail: text }));
-                    })
-                    .catch(() => {});
+        if (window.Clipboard && Clipboard.prototype.write) {
+          const original = Clipboard.prototype.write;
+          Object.defineProperty(Clipboard.prototype, 'write', {
+            value: function(items) {
+              try {
+                const first = items && items[0];
+                if (first && typeof first.getType === 'function') {
+                  const typeOrder = ['text/plain', 'text/markdown', 'text/html'];
+                  const types = Array.isArray(first.types) ? first.types : [];
+                  const pick =
+                    typeOrder.find((t) => types.includes(t)) ||
+                    types.find((t) => typeOrder.includes(t)) ||
+                    types[0];
+                  if (pick) {
+                    first.getType(pick)
+                      .then((blob) => blob.text())
+                      .then((text) => {
+                        document.dispatchEvent(new CustomEvent('captured-clipboard', { detail: text }));
+                      })
+                      .catch(() => {});
+                  }
                 }
-              }
-            } catch (e) {}
-            return original(items);
-          };
+              } catch (e) {}
+              return original.apply(this, arguments);
+            },
+            writable: true,
+            configurable: true
+          });
         }
       } catch (e) {}
 
@@ -150,7 +158,39 @@ async function scrapeClaude() {
   return turns;
 }
 
+// Auto-scroll to top to load full history for Gemini
+async function loadFullHistoryGemini() {
+  const container = document.querySelector('gmat-main-content, main, .chat-history, .conversation-container') || window;
+  let lastTurnCount = document.querySelectorAll("user-query").length;
+  let stableCount = 0;
+  
+  for (let i = 0; i < 40; i++) {
+    if (container === window) {
+      window.scrollTo({ top: 0, behavior: 'instant' });
+    } else {
+      container.scrollTop = 0;
+    }
+    
+    await wait(1200);
+    
+    const currentTurnCount = document.querySelectorAll("user-query").length;
+    if (currentTurnCount > lastTurnCount) {
+      lastTurnCount = currentTurnCount;
+      stableCount = 0;
+    } else {
+      const loadingSpinner = document.querySelector('mat-progress-spinner, [role="progressbar"], .loading');
+      if (!loadingSpinner) {
+        stableCount++;
+        if (stableCount >= 2) break;
+      } else {
+        stableCount = 0;
+      }
+    }
+  }
+}
+
 async function scrapeGemini() {
+  await loadFullHistoryGemini();
   const turns = [];
   const elements = document.querySelectorAll("user-query, model-response");
 
